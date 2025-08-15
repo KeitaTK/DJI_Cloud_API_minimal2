@@ -111,14 +111,17 @@
     <button id="report-button">Report</button>
   </div>
   <ul id="logs"></ul>
-  <script>
-    const HOST = "hostnamehere";      // プレースホルダ置換
-    const USER = "userloginhere";
-    const PASS = "userpasswordhere";
 
-    const APP_ID  = 130943;
-    const APP_KEY = "36de02838593125bbe9ab32d08813fb";
-    const LICENSE = "HdMDWuYVpt05j3pIk+/vqoJlfY+SP6vp7z6XDyzGeM0d+Oy4JavUyYP/VsOw5i0UE07Lt5q9rzk9Jex1+CnPQO7OzBE6XwcNwZ0pDP/LPTjqdSPRezbmRB8z5yNf5QbEhe1YyLh++JzW9mr9BCkXy1v1h2+Uo0S1MSRZcLgLRw0=";
+  <script>
+    // サーバー起動時に置換されるプレースホルダ
+    const HOST = "hostnamehere";      // 例: 192.168.0.10
+    const USER = "userloginhere";     // 例: admin
+    const PASS = "userpasswordhere";  // 例: public
+
+    // DJI Developer ポータルで取得した値に置き換える
+    const APP_ID  = 168252;
+    const APP_KEY = "90014c64b96a1822b28c27a57401e7c";
+    const LICENSE = "pPtR5O/12yKso2H8oOOqwsDd9pV4f/MpJKjScqLDk5chRbRaX2LRwallcoWlFWKiCbIEVMw1HuE+KysY66BJMt+Bogw6Ys8aPE6rkSn47oMlYpsEBUm3g6nvMcopyQpo7Aqzqg4rEvUGvQnKTAhA9S55lK6HizhbF/t16x9YzcY=";
 
     const logs = document.getElementById("logs");
     function log(msg) {
@@ -148,13 +151,17 @@
         log("platformIsVerified: " + window.djiBridge.platformIsVerified());
 
         const params = JSON.stringify({
-          host:    `tcp://${HOST}:1883`,
+          host: `tcp://${HOST}:1883`,
           connectCallback: "onConnect",
           username: USER,
           password: token
         });
-        log("platformLoadComponent: " + window.djiBridge.platformLoadComponent("thing", params));
-        log("thingConnect: " + window.djiBridge.thingConnect(USER, token, "onConnect"));
+        log("platformLoadComponent: " +
+          window.djiBridge.platformLoadComponent("thing", params)
+        );
+        log("thingConnect: " +
+          window.djiBridge.thingConnect(USER, token, "onConnect")
+        );
         log("初期接続状態: " + window.djiBridge.thingGetConnectState());
       } catch (e) {
         log(e.message);
@@ -162,15 +169,20 @@
     });
 
     document.getElementById("logout-button").addEventListener("click", () => {
-      log("platformUnloadComponent: " + window.djiBridge.platformUnloadComponent("thing"));
+      log("platformUnloadComponent: " +
+        window.djiBridge.platformUnloadComponent("thing")
+      );
     });
 
     document.getElementById("report-button").addEventListener("click", () => {
       log("isLoaded: " + window.djiBridge.platformIsComponentLoaded("thing") +
-          ", state: " + window.djiBridge.thingGetConnectState());
+          ", state: " + window.djiBridge.thingGetConnectState()
+      );
     });
 
-    function onConnect(code, msg) { log(`onConnect コールバック code=${code}, msg=${msg}`); }
+    function onConnect(code, msg) {
+      log(`onConnect コールバック code=${code}, msg=${msg}`);
+    }
     window.onConnect = onConnect;
 
     log("ページロード完了");

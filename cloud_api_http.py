@@ -30,7 +30,6 @@
 #     uvicorn.run(app, host=host_addr, port=5000)
 
 
-
 #!/usr/bin/env python3
 import os
 import requests
@@ -40,12 +39,12 @@ from fastapi.responses import HTMLResponse, JSONResponse
 
 load_dotenv()
 
-HOST_ADDR    = os.getenv("HOST_ADDR", "0.0.0.0")
-HTTP_PORT    = int(os.getenv("HTTP_PORT", 5000))
-CLIENT_KEY   = os.environ["CLIENT_KEY"]
-APP_LICENSE  = os.environ["APP_LICENSE"]
-USERNAME     = os.environ["USERNAME"]
-PASSWORD     = os.environ["PASSWORD"]
+HOST_ADDR   = os.getenv("HOST_ADDR", "0.0.0.0")
+HTTP_PORT   = int(os.getenv("HTTP_PORT", 5000))
+CLIENT_KEY  = os.environ["CLIENT_KEY"]    # App Key
+APP_LICENSE = os.environ["APP_LICENSE"]   # App License
+USERNAME    = os.environ["USERNAME"]      # pilot 用ユーザー名
+PASSWORD    = os.environ["PASSWORD"]      # pilot 用パスワード
 
 app = FastAPI()
 
@@ -55,6 +54,7 @@ async def pilot_login():
     if not os.path.exists(path):
         raise HTTPException(500, "Template not found")
     content = open(path, encoding="utf-8").read()
+    # プレースホルダを実際の値に置換
     content = content.replace("hostnamehere", HOST_ADDR)
     content = content.replace("userloginhere", USERNAME)
     content = content.replace("userpasswordhere", PASSWORD)
@@ -64,16 +64,19 @@ async def pilot_login():
 async def auth_token(username: str = Form(...), password: str = Form(...)):
     url = "https://developer.dji.com/cloudapi/auth/v1/token"
     payload = {
-        "client_key":    CLIENT_KEY,
+        "client_key":     CLIENT_KEY,
         "client_license": APP_LICENSE,
-        "username":      username,
-        "password":      password
+        "username":       username,
+        "password":       password
     }
     resp = requests.post(url, json=payload, timeout=10)
     if resp.status_code != 200:
         raise HTTPException(502, "Token fetch failed")
     data = resp.json()
-    return JSONResponse({"access_token": data["access_token"], "expires_in": data["expires_in"]})
+    return JSONResponse({
+        "access_token": data.get("access_token"),
+        "expires_in":   data.get("expires_in")
+    })
 
 if __name__ == "__main__":
     import uvicorn
