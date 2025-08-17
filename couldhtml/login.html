@@ -91,20 +91,19 @@
   </body>
 </html> -->
 
-
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8" />
-  <title>DJI Cloud API Test</title>
+  <meta charset="UTF-8">
+  <title>DJI Cloud API Login</title>
   <style>
-    .button-row { display: flex; justify-content: space-between; margin-bottom:1em; }
-    button { flex:1; margin:0 5px; }
-    #logs { list-style:none; padding:0; font-family:monospace; }
+    .button-row { display: flex; justify-content: space-between; margin-bottom: 1em; }
+    button { flex: 1; margin: 0 5px; }
+    #logs { list-style: none; padding: 0; font-family: monospace; }
   </style>
 </head>
 <body>
-  <h1>DJI Cloud API Test</h1>
+  <h1>DJI Cloud API Login</h1>
   <div class="button-row">
     <button id="login-button">Login</button>
     <button id="logout-button">Logout</button>
@@ -113,79 +112,134 @@
   <ul id="logs"></ul>
 
   <script>
-    // サーバー起動時に置換されるプレースホルダ
-    const HOST = "hostnamehere";      // 例: 192.168.0.10
-    const USER = "userloginhere";     // 例: admin
-    const PASS = "userpasswordhere";  // 例: public
+    // サーバー側で置換されるプレースホルダ
+    const HOST = "hostnamehere";
+    const USER = "userloginhere";
+    const PASS = "userpasswordhere";
 
-    // DJI Developer ポータルで取得した値に置き換える
-    const APP_ID  = 168252;
+    // DJI Developer ポータルで取得した値
+    const APP_ID = 168252;
     const APP_KEY = "90014c64b96a1822b28c27a57401e7c";
     const LICENSE = "pPtR5O/12yKso2H8oOOqwsDd9pV4f/MpJKjScqLDk5chRbRaX2LRwallcoWlFWKiCbIEVMw1HuE+KysY66BJMt+Bogw6Ys8aPE6rkSn47oMlYpsEBUm3g6nvMcopyQpo7Aqzqg4rEvUGvQnKTAhA9S55lK6HizhbF/t16x9YzcY=";
 
     const logs = document.getElementById("logs");
     function log(msg) {
       const li = document.createElement("li");
-      li.textContent = msg;
+      li.textContent = new Date().toLocaleTimeString() + ": " + msg;
       logs.appendChild(li);
     }
 
-    async function fetchToken() {
-      const res = await fetch(`http://${HOST}:5000/auth/token`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: USER, password: PASS })
-      });
-      if (!res.ok) throw new Error("Token fetch failed: " + res.status);
-      return (await res.json()).access_token;
-    }
-
+    // 公式フローに従った認証実装
     document.getElementById("login-button").addEventListener("click", async () => {
       try {
-        log("Login開始");
-        const token = await fetchToken();
-        log("取得トークン: " + token);
+        log("=== Login プロセス開始 ===");
 
-        log("platformVerifyLicense 実行");
-        window.djiBridge.platformVerifyLicense(APP_ID, APP_KEY, LICENSE);
-        log("platformIsVerified: " + window.djiBridge.platformIsVerified());
+        // Step 1: License 検証（公式フロー必須）
+        log("Step 1: License 検証中...");
+        const licenseResult = window.djiBridge.platformVerifyLicense(APP_ID, APP_KEY, LICENSE);
+        log("License 検証結果: " + JSON.stringify(licenseResult));
+        
+        if (!window.djiBridge.platformIsVerified()) {
+          throw new Error("License 検証に失敗しました");
+        }
+        log("✓ License 検証成功");
 
-        const params = JSON.stringify({
+        // Step 2: 既存トークンの確認
+        log("Step 2: 既存トークン確認中...");
+        let token = null;
+        try {
+          token = window.djiBridge.apiGetToken();
+          log("既存トークン: " + (token ? "あり" : "なし"));
+        } catch (e) {
+          log("既存トークン取得エラー: " + e.message);
+        }
+
+        // Step 3: トークンが無いまたは無効な場合、新規取得
+        if (!token) {
+          log("Step 3: 新規トークン取得中...");
+          const response = await fetch(`http://${HOST}:5000/auth/token`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ 
+              username: USER, 
+              password: PASS,
+              app_id: APP_ID,
+              app_key: APP_KEY 
+            })
+          });
+
+          if (!response.ok) {
+            throw new Error(`トークン取得失敗: ${response.status}`);
+          }
+
+          const tokenData = await response.json();
+          token = tokenData.access_token;
+          log("✓ 新規トークン取得成功: " + token.substring(0, 20) + "...");
+
+          // API モジュールにトークンを設定
+          window.djiBridge.apiSetToken(token);
+        }
+
+        // Step 4: Cloud Module のロード
+        log("Step 4: Cloud Module ロード中...");
+        const cloudParams = JSON.stringify({
           host: `tcp://${HOST}:1883`,
-          connectCallback: "onConnect",
+          connectCallback: "onMqttConnect",
           username: USER,
-          password: token
+          password: token  // トークンをパスワードとして使用
         });
-        log("platformLoadComponent: " +
-          window.djiBridge.platformLoadComponent("thing", params)
-        );
-        log("thingConnect: " +
-          window.djiBridge.thingConnect(USER, token, "onConnect")
-        );
-        log("初期接続状態: " + window.djiBridge.thingGetConnectState());
-      } catch (e) {
-        log(e.message);
+
+        const loadResult = window.djiBridge.platformLoadComponent("thing", cloudParams);
+        log("Cloud Module ロード結果: " + JSON.stringify(loadResult));
+
+        // Step 5: MQTT 接続開始
+        log("Step 5: MQTT 接続開始...");
+        const connectResult = window.djiBridge.thingConnect(USER, token, "onMqttConnect");
+        log("MQTT 接続結果: " + JSON.stringify(connectResult));
+
+        // Step 6: ワークスペース情報設定
+        log("Step 6: ワークスペース情報設定...");
+        window.djiBridge.platformSetWorkspaceId("e3dea0f5-37f2-4d79-ae58-490af3228069");
+        window.djiBridge.platformSetInformation("Test Platform", "Test Workspace", "テスト用ワークスペース");
+        
+        log("=== Login プロセス完了 ===");
+        
+      } catch (error) {
+        log("❌ エラー: " + error.message);
       }
     });
 
     document.getElementById("logout-button").addEventListener("click", () => {
-      log("platformUnloadComponent: " +
-        window.djiBridge.platformUnloadComponent("thing")
-      );
+      log("=== Logout プロセス開始 ===");
+      try {
+        window.djiBridge.thingDisconnect();
+        window.djiBridge.platformUnloadComponent("thing");
+        log("✓ Logout 完了");
+      } catch (e) {
+        log("Logout エラー: " + e.message);
+      }
     });
 
     document.getElementById("report-button").addEventListener("click", () => {
-      log("isLoaded: " + window.djiBridge.platformIsComponentLoaded("thing") +
-          ", state: " + window.djiBridge.thingGetConnectState()
-      );
+      log("=== ステータス確認 ===");
+      try {
+        log("License認証済み: " + window.djiBridge.platformIsVerified());
+        log("Cloud Module ロード済み: " + window.djiBridge.platformIsComponentLoaded("thing"));
+        log("MQTT 接続状態: " + window.djiBridge.thingGetConnectState());
+        const token = window.djiBridge.apiGetToken();
+        log("現在のトークン: " + (token ? token.substring(0, 20) + "..." : "なし"));
+      } catch (e) {
+        log("ステータス確認エラー: " + e.message);
+      }
     });
 
-    function onConnect(code, msg) {
-      log(`onConnect コールバック code=${code}, msg=${msg}`);
+    // MQTT 接続コールバック
+    function onMqttConnect(code, message) {
+      log(`MQTT接続コールバック: code=${code}, message=${message}`);
     }
-    window.onConnect = onConnect;
+    window.onMqttConnect = onMqttConnect;
 
-    log("ページロード完了");
+    log("ページ初期化完了");
   </script>
 </body>
 </html>
